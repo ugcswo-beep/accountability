@@ -1,147 +1,294 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const cors = require('cors');
-const { MongoClient, ObjectId } = require('mongodb');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// File upload configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = 'uploads';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir);
+// ========== IMPROVED MONGODB CONNECTION ==========
+const connectDB = async () => {
+    try {
+        console.log('🔗 Attempting to connect to MongoDB...');
+        
+        if (!process.env.MONGODB_URI) {
+            throw new Error('❌ MONGODB_URI environment variable is not defined');
+        }
+
+        // Log masked connection string (hides password)
+        const maskedURI = process.env.MONGODB_URI.replace(/:[^:]*@/, ':****@');
+        console.log('📝 MongoDB URI:', maskedURI);
+
+        const conn = await mongoose.connect(process.env.MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 10000,
+            socketTimeoutMS: 45000,
+        });
+        
+        console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+        console.log(`✅ Database Name: ${conn.connection.name}`);
+        return conn;
+    } catch (error) {
+        console.error('❌ MongoDB connection error:', error.message);
+        console.log('🔄 Retrying connection in 5 seconds...');
+        setTimeout(connectDB, 5000);
     }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
+};
 
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }
-});
-
-// MongoDB connection
-const uri = process.env.MONGODB_URI || "mongodb://localhost:27017";
-const client = new MongoClient(uri);
-let db, submittedExpensesCollection;
-
-// Connect to MongoDB
-async function connectDB() {
-  try {
-    await client.connect();
-    db = client.db('expense-tracker');
-    submittedExpensesCollection = db.collection('submitted_expenses');
-    console.log('Connected to MongoDB - Accountability System');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-  }
-}
-
+// Initialize database connection
 connectDB();
 
-// Routes
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Accountability System API is running!',
-    endpoints: {
-      submitExpense: 'POST /expenses/submit',
-      getSubmitted: 'GET /expenses/submitted',
-      markProcessed: 'POST /expenses/process/:id'
-    }
-  });
+// MongoDB connection event listeners
+mongoose.connection.on('connected', () => {
+    console.log('✅ Mongoose connected to MongoDB');
 });
 
-// SUBMIT expense with receipt
-app.post('/expenses/submit', upload.single('receipt'), async (req, res) => {
-  try {
-    const { description, amount, category, date, submittedBy, notes, startingBalance } = req.body;
+mongoose.connection.on('error', (err) => {
+    console.error('❌ Mongoose connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log('⚠️ Mongoose disconnected from MongoDB');
+});
+// ========== END MONGODB CONNECTION ==========
+
+// Expense Schema
+const expenseSchema = new mongoose.Schema({
+    organization: { type: String, required: true },
+    event: { type: String, required: true },
+    dateRange: String,
+    cashHolder: String,
+    totalAdvanced: Number,
+    reportDate: String,
+    missingReceiptsExplanation: String,
+    expenses: [{
+        date: String,
+        description: String,
+        vendor: String,
+        category: String,
+        amount: Number,
+        purchasedBy: String,
+        receiptFile: String,
+        notes: String
+    }],
+    totalExpenses: Number,
+    cashToReturn: Number,
+    submittedBy: String,
+    status: { type: String, default: 'submitted' },
+    submissionDate: { type: Date, default: Date.now }
+});
+
+const Expense = mongoose.model('Expense', expenseSchema);
+
+// ========== HEALTH CHECK ENDPOINT ==========
+app.get('/health', (req, res) => {
+    const dbStatus = mongoose.connection.readyState;
+    let dbStatusText = 'unknown';
     
-    if (!description || !amount) {
-      return res.status(400).json({ error: 'Description and amount are required' });
+    switch(dbStatus) {
+        case 0: dbStatusText = 'disconnected'; break;
+        case 1: dbStatusText = 'connected'; break;
+        case 2: dbStatusText = 'connecting'; break;
+        case 3: dbStatusText = 'disconnecting'; break;
     }
-
-    const submittedExpense = {
-      description,
-      amount: parseFloat(amount),
-      category: category || 'Other',
-      date: date || new Date().toISOString().split('T')[0],
-      submittedBy: submittedBy || 'Anonymous',
-      notes: notes || '',
-      fundSource: 'petty-cash',
-      startingBalance: startingBalance ? parseFloat(startingBalance) : null,
-      status: 'submitted',
-      receipt: req.file ? req.file.filename : null,
-      submittedAt: new Date(),
-      processed: false,
-      processedAt: null,
-      processedBy: null
-    };
-
-    const result = await submittedExpensesCollection.insertOne(submittedExpense);
-    res.status(201).json({ 
-      message: 'Expense submitted successfully', 
-      expense: { ...submittedExpense, _id: result.insertedId } 
+    
+    res.json({
+        status: 'OK',
+        database: dbStatusText,
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development',
+        port: PORT
     });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to submit expense' });
-  }
 });
 
-// GET all submitted expenses
-app.get('/expenses/submitted', async (req, res) => {
-  try {
-    const expenses = await submittedExpensesCollection.find({}).sort({ submittedAt: -1 }).toArray();
-    res.json(expenses);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch submitted expenses' });
-  }
+// ========== MAIN ENDPOINT ==========
+app.get('/', (req, res) => {
+    const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+    
+    res.json({
+        message: "Accountability System API is running!",
+        database: dbStatus,
+        timestamp: new Date().toISOString(),
+        endpoints: {
+            health: "GET /health",
+            submitExpense: "POST /expenses/submit",
+            getSubmitted: "GET /expenses/submitted", 
+            markProcessed: "POST /expenses/process/:id",
+            getExpense: "GET /expenses/:id"
+        }
+    });
 });
 
-// MARK as processed
-app.post('/expenses/process/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { processedBy, accountingRef } = req.body;
-    
-    const result = await submittedExpensesCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { 
-        $set: { 
-          processed: true,
-          processedAt: new Date(),
-          processedBy: processedBy || 'Admin',
-          accountingRef: accountingRef || '',
-          status: 'processed'
-        } 
-      }
-    );
-    
-    if (result.modifiedCount === 0) {
-      return res.status(404).json({ error: 'Expense not found' });
+// ========== SUBMIT EXPENSE ENDPOINT ==========
+app.post('/expenses/submit', async (req, res) => {
+    try {
+        console.log('📥 Received expense submission:', req.body);
+        
+        const expenseData = {
+            ...req.body,
+            submissionDate: new Date()
+        };
+
+        const expense = new Expense(expenseData);
+        await expense.save();
+
+        console.log('✅ Expense saved to database with ID:', expense._id);
+        
+        res.json({
+            success: true,
+            message: "Expense submitted successfully",
+            expenseId: expense._id,
+            data: expense
+        });
+    } catch (error) {
+        console.error('❌ Error submitting expense:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to submit expense: ' + error.message
+        });
     }
-    
-    res.json({ message: 'Expense marked as processed' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to process expense' });
-  }
 });
 
-// Serve receipt files
-app.use('/uploads', express.static('uploads'));
+// ========== GET SUBMITTED EXPENSES ENDPOINT ==========
+app.get('/expenses/submitted', async (req, res) => {
+    try {
+        const expenses = await Expense.find().sort({ submissionDate: -1 });
+        
+        res.json({
+            success: true,
+            count: expenses.length,
+            data: expenses
+        });
+    } catch (error) {
+        console.error('❌ Error fetching expenses:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch expenses: ' + error.message
+        });
+    }
+});
 
-// Start server
+// ========== GET SPECIFIC EXPENSE ENDPOINT ==========
+app.get('/expenses/:id', async (req, res) => {
+    try {
+        const expense = await Expense.findById(req.params.id);
+        
+        if (!expense) {
+            return res.status(404).json({
+                success: false,
+                message: 'Expense not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: expense
+        });
+    } catch (error) {
+        console.error('❌ Error fetching expense:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch expense: ' + error.message
+        });
+    }
+});
+
+// ========== MARK EXPENSE PROCESSED ENDPOINT ==========
+app.post('/expenses/process/:id', async (req, res) => {
+    try {
+        const expense = await Expense.findByIdAndUpdate(
+            req.params.id,
+            { status: 'processed', processedDate: new Date() },
+            { new: true }
+        );
+
+        if (!expense) {
+            return res.status(404).json({
+                success: false,
+                message: 'Expense not found'
+            });
+        }
+
+        console.log('✅ Expense marked as processed:', expense._id);
+        
+        res.json({
+            success: true,
+            message: `Expense ${req.params.id} marked as processed`,
+            data: expense
+        });
+    } catch (error) {
+        console.error('❌ Error processing expense:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to process expense: ' + error.message
+        });
+    }
+});
+
+// ========== DELETE EXPENSE ENDPOINT ==========
+app.delete('/expenses/:id', async (req, res) => {
+    try {
+        const expense = await Expense.findByIdAndDelete(req.params.id);
+
+        if (!expense) {
+            return res.status(404).json({
+                success: false,
+                message: 'Expense not found'
+            });
+        }
+
+        console.log('🗑️ Expense deleted:', req.params.id);
+        
+        res.json({
+            success: true,
+            message: 'Expense deleted successfully'
+        });
+    } catch (error) {
+        console.error('❌ Error deleting expense:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete expense: ' + error.message
+        });
+    }
+});
+
+// ========== ERROR HANDLING MIDDLEWARE ==========
+app.use((err, req, res, next) => {
+    console.error('🚨 Unhandled error:', err.stack);
+    res.status(500).json({
+        success: false,
+        message: 'Something went wrong!',
+        error: process.env.NODE_ENV === 'production' ? {} : err.message
+    });
+});
+
+// ========== 404 HANDLER ==========
+app.use('*', (req, res) => {
+    res.status(404).json({
+        success: false,
+        message: 'Route not found',
+        availableEndpoints: {
+            health: 'GET /health',
+            submitExpense: 'POST /expenses/submit',
+            getSubmitted: 'GET /expenses/submitted',
+            markProcessed: 'POST /expenses/process/:id',
+            getExpense: 'GET /expenses/:id',
+            deleteExpense: 'DELETE /expenses/:id'
+        }
+    });
+});
+
+// ========== START SERVER ==========
 app.listen(PORT, () => {
-  console.log(`Accountability System running on port ${PORT}`);
+    console.log('🚀 Accountability System API Server Started!');
+    console.log(`📍 Port: ${PORT}`);
+    console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔍 Health check: https://accountability-backend-wqms.onrender.com/health`);
+    console.log(`📊 Main endpoint: https://accountability-backend-wqms.onrender.com/`);
+    console.log('⏰ Server time:', new Date().toISOString());
 });
