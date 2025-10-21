@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Petty Cash Reconciliation - Expense System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .form-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 2px solid #f0f0f0;
+            border-radius: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .balance-section {
+            background: #e8f5e8;
+            border: 2px solid #27ae60;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .balance-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            text-align: center;
+        }
+
+        .balance-item {
+            padding: 15px;
+        }
+
+        .balance-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .starting-balance { color: #3498db; }
+        .total-spent { color: #e74c3c; }
+        .remaining-balance { color: #27ae60; }
+
+        .expense-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1.5fr 2fr auto;
+            gap: 10px;
+            align-items: end;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #f0f9f0;
+            border-radius: 8px;
+            border-left: 4px solid #27ae60;
+        }
+
+        .remove-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            height: fit-content;
+        }
+
+        .add-btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .file-upload {
+            border: 2px dashed #ddd;
+            padding: 8px;
+            text-align: center;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            background: white;
+        }
+
+        .file-name {
+            color: #666;
+            font-size: 11px;
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .review-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .expense-review-item {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1.5fr 2fr;
+            gap: 15px;
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            align-items: center;
+        }
+
+        .review-header {
+            font-weight: bold;
+            background: #e9ecef;
+        }
+
+        .submit-section {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .balance-warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            margin: 10px 0;
+            display: none;
+        }
+
+        .negative-balance {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💰 Petty Cash Reconciliation</h1>
+        <p class="subtitle">Track petty cash expenses and calculate remaining balance</p>
+        
+        <div id="successMessage" class="success-message">
+            ✅ Petty cash reconciliation submitted successfully!
+        </div>
+
+        <div id="errorMessage" class="error-message">
+            ❌ Error submitting reconciliation. Please try again.
+        </div>
+
+        <div class="form-section">
+            <h3>👤 Custodian Information</h3>
+            <div class="form-group">
+                <label for="submittedBy">Petty Cash Custodian Name</label>
+                <input type="text" id="submittedBy" placeholder="Enter custodian's full name">
+            </div>
+            <div class="form-group">
+                <label for="period">Reconciliation Period</label>
+                <input type="text" id="period" placeholder="e.g., January 2024, Week of Jan 1-7">
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3>💵 Starting Balance</h3>
+            <div class="form-group">
+                <label for="startingBalance">Petty Cash Starting Balance ($)</label>
+                <input type="number" id="startingBalance" step="0.01" placeholder="0.00" oninput="updateBalance()">
+            </div>
+        </div>
+
+        <div id="balanceSection" class="balance-section" style="display: none;">
+            <h3 style="text-align: center; margin-bottom: 20px;">📊 Petty Cash Balance</h3>
+            <div class="balance-grid">
+                <div class="balance-item">
+                    <div>Starting Balance</div>
+                    <div class="balance-value starting-balance" id="displayStartingBalance">$0.00</div>
+                    <div>Beginning amount</div>
+                </div>
+                <div class="balance-item">
+                    <div>Total Spent</div>
+                    <div class="balance-value total-spent" id="displayTotalSpent">$0.00</div>
+                    <div>Expenses incurred</div>
+                </div>
+                <div class="balance-item">
+                    <div>Remaining Balance</div>
+                    <div class="balance-value remaining-balance" id="displayRemainingBalance">$0.00</div>
+                    <div>Should be in cash box</div>
+                </div>
+            </div>
+            <div id="balanceWarning" class="balance-warning">
+                ⚠️ Remaining balance is negative! Please verify your entries.
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3>📝 Expense Items</h3>
+            <button type="button" class="add-btn" onclick="addExpenseRow()">+ Add Expense Item</button>
+            <div id="expensesContainer">
+                <!-- Expense rows will be added here -->
+            </div>
+        </div>
+
+        <div id="reviewSection" class="review-section">
+            <h3>👁️ Review Reconciliation</h3>
+            <div class="expense-review-item review-header">
+                <div>Description</div>
+                <div>Amount</div>
+                <div>Category</div>
+                <div>Receipt</div>
+            </div>
+            <div id="reviewList">
+                <!-- Review items will be added here -->
+            </div>
+        </div>
+
+        <div class="submit-section">
+            <button type="button" class="submit-btn" onclick="reviewReconciliation()">Review Reconciliation Report</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000';
+        let expenseCounter = 0;
+
+        // Add expense row
+        function addExpenseRow() {
+            expenseCounter++;
+            const container = document.getElementById('expensesContainer');
+            
+            const row = document.createElement('div');
+            row.className = 'expense-row';
+            row.innerHTML = `
+                <div>
+                    <label>Expense Description</label>
+                    <input type="text" class="expense-desc" placeholder="What was this expense for?" oninput="updateBalance()">
+                </div>
+                <div>
+                    <label>Amount ($)</label>
+                    <input type="number" class="expense-amount" step="0.01" placeholder="0.00" oninput="updateBalance()">
+                </div>
+                <div>
+                    <label>Category</label>
+                    <select class="expense-category">
+                        <option value="Office Supplies">Office Supplies</option>
+                        <option value="Meals & Entertainment">Meals & Entertainment</option>
+                        <option value="Travel">Travel</option>
+                        <option value="Transportation">Transportation</option>
+                        <option value="Postage & Shipping">Postage & Shipping</option>
+                        <option value="Utilities">Utilities</option>
+                        <option value="Maintenance">Maintenance</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Receipt</label>
+                    <div class="file-upload" onclick="this.querySelector('input').click()">
+                        📎 Upload Receipt
+                        <input type="file" class="expense-receipt" accept=".jpg,.jpeg,.png,.pdf,.gif" style="display: none;">
+                        <div class="file-name">No receipt</div>
+                    </div>
+                </div>
+                <div>
+                    <button type="button" class="remove-btn" onclick="removeExpenseRow(this)">×</button>
+                </div>
+            `;
+            
+            // Add event listener for file input
+            const fileInput = row.querySelector('.expense-receipt');
+            fileInput.addEventListener('change', function(e) {
+                const fileName = e.target.files[0] ? e.target.files[0].name : 'No receipt';
+                this.parentElement.querySelector('.file-name').textContent = fileName;
+            });
+            
+            container.appendChild(row);
+            updateBalance();
+        }
+
+        // Remove expense row
+        function removeExpenseRow(button) {
+            button.closest('.expense-row').remove();
+            updateBalance();
+        }
+
+        // Update the balance calculation
+        function updateBalance() {
+            const startingBalance = parseFloat(document.getElementById('startingBalance').value) || 0;
+            const totalSpent = calculateTotalSpent();
+            const remainingBalance = startingBalance - totalSpent;
+
+            // Update display
+            document.getElementById('displayStartingBalance').textContent = `$${startingBalance.toFixed(2)}`;
+            document.getElementById('displayTotalSpent').textContent = `$${totalSpent.toFixed(2)}`;
+            document.getElementById('displayRemainingBalance').textContent = `$${remainingBalance.toFixed(2)}`;
+
+            // Show/hide balance section
+            if (startingBalance > 0 || totalSpent > 0) {
+                document.getElementById('balanceSection').style.display = 'block';
+            } else {
+                document.getElementById('balanceSection').style.display = 'none';
+            }
+
+            // Show warning for negative balance
+            const warning = document.getElementById('balanceWarning');
+            if (remainingBalance < 0) {
+                warning.style.display = 'block';
+                document.getElementById('displayRemainingBalance').classList.add('negative-balance');
+            } else {
+                warning.style.display = 'none';
+                document.getElementById('displayRemainingBalance').classList.remove('negative-balance');
+            }
+        }
+
+        // Calculate total spent from all expenses
+        function calculateTotalSpent() {
+            let total = 0;
+            const rows = document.querySelectorAll('.expense-row');
+            
+            rows.forEach(row => {
+                const amount = row.querySelector('.expense-amount').value;
+                if (amount) {
+                    total += parseFloat(amount);
+                }
+            });
+            
+            return total;
+        }
+
+        // Collect all expenses from the form
+        function collectExpenses() {
+            const expenses = [];
+            const rows = document.querySelectorAll('.expense-row');
+            
+            rows.forEach(row => {
+                const description = row.querySelector('.expense-desc').value;
+                const amount = row.querySelector('.expense-amount').value;
+                const category = row.querySelector('.expense-category').value;
+                const receiptFile = row.querySelector('.expense-receipt').files[0];
+                
+                if (description && amount) {
+                    expenses.push({
+                        description,
+                        amount: parseFloat(amount),
+                        category,
+                        date: new Date().toISOString().split('T')[0],
+                        receiptFile: receiptFile
+                    });
+                }
+            });
+            
+            return expenses;
+        }
+
+        // Review reconciliation before submission
+        function reviewReconciliation() {
+            const startingBalance = parseFloat(document.getElementById('startingBalance').value) || 0;
+            const expenses = collectExpenses();
+            
+            if (startingBalance === 0) {
+                alert('Please enter the petty cash starting balance.');
+                return;
+            }
+
+            if (expenses.length === 0) {
+                alert('Please add at least one expense item.');
+                return;
+            }
+
+            // Update review section
+            const reviewList = document.getElementById('reviewList');
+            reviewList.innerHTML = '';
+            
+            expenses.forEach(expense => {
+                const item = document.createElement('div');
+                item.className = 'expense-review-item';
+                item.innerHTML = `
+                    <div>${expense.description}</div>
+                    <div>$${parseFloat(expense.amount).toFixed(2)}</div>
+                    <div>${expense.category}</div>
+                    <div>${expense.receiptFile ? '✅ ' + expense.receiptFile.name : '❌ No receipt'}</div>
+                `;
+                reviewList.appendChild(item);
+            });
+
+            // Show review section
+            document.getElementById('reviewSection').style.display = 'block';
+            
+            // Scroll to review section
+            document.getElementById('reviewSection').scrollIntoView({ behavior: 'smooth' });
+            
+            // Change button to submit
+            document.querySelector('.submit-btn').textContent = '✅ Submit Reconciliation Report';
+            document.querySelector('.submit-btn').onclick = submitReconciliation;
+        }
+
+        // Submit reconciliation to the backend
+        async function submitReconciliation() {
+            const startingBalance = parseFloat(document.getElementById('startingBalance').value) || 0;
+            const expenses = collectExpenses();
+            const submittedBy = document.getElementById('submittedBy').value || 'Anonymous Custodian';
+            const period = document.getElementById('period').value || 'Unspecified Period';
+            
+            if (startingBalance === 0) {
+                alert('Please enter the petty cash starting balance.');
+                return;
+            }
+
+            if (expenses.length === 0) {
+                alert('Please add at least one expense item.');
+                return;
+            }
+
+            const submitBtn = document.querySelector('.submit-btn');
+            const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            // Hide previous messages
+            successMessage.style.display = 'none';
+            errorMessage.style.display = 'none';
+            
+            // Disable submit button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting Reconciliation...';
+
+            try {
+                let successCount = 0;
+                let errorCount = 0;
+                const totalSpent = calculateTotalSpent();
+                const remainingBalance = startingBalance - totalSpent;
+
+                // Submit each expense individually with its own receipt
+                for (const expense of expenses) {
+                    const formData = new FormData();
+                    formData.append('submittedBy', submittedBy);
+                    formData.append('description', expense.description);
+                    formData.append('amount', expense.amount);
+                    formData.append('category', expense.category);
+                    formData.append('date', expense.date);
+                    formData.append('fundSource', 'petty-cash');
+                    formData.append('startingBalance', startingBalance);
+                    formData.append('notes', `Reconciliation Period: ${period}\nTotal Spent: $${totalSpent.toFixed(2)}\nRemaining Balance: $${remainingBalance.toFixed(2)}`);
+                    
+                    // Add individual receipt file
+                    if (expense.receiptFile) {
+                        formData.append('receipt', expense.receiptFile);
+                    }
+
+                    const response = await fetch(`${API_BASE}/expenses/submit`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                    }
+                }
+
+                if (errorCount === 0) {
+                    successMessage.innerHTML = `
+                        ✅ Petty Cash Reconciliation Submitted!<br>
+                        <strong>Period:</strong> ${period}<br>
+                        <strong>Custodian:</strong> ${submittedBy}<br>
+                        <strong>Starting Balance:</strong> $${startingBalance.toFixed(2)}<br>
+                        <strong>Total Spent:</strong> $${totalSpent.toFixed(2)}<br>
+                        <strong>Remaining Balance:</strong> $${remainingBalance.toFixed(2)}<br>
+                        <strong>Expenses Recorded:</strong> ${successCount} items
+                    `;
+                    successMessage.style.display = 'block';
+                    
+                    // Reset form
+                    document.getElementById('expensesContainer').innerHTML = '';
+                    document.getElementById('submittedBy').value = '';
+                    document.getElementById('period').value = '';
+                    document.getElementById('startingBalance').value = '';
+                    document.getElementById('reviewSection').style.display = 'none';
+                    document.getElementById('balanceSection').style.display = 'none';
+                    
+                    // Add first empty row
+                    addExpenseRow();
+                    
+                    // Reset button
+                    submitBtn.textContent = 'Review Reconciliation Report';
+                    submitBtn.onclick = reviewReconciliation;
+                    
+                    // Scroll to top
+                    window.scrollTo(0, 0);
+                } else {
+                    throw new Error(`${successCount} expenses submitted, ${errorCount} failed`);
+                }
+
+            } catch (error) {
+                errorMessage.textContent = `❌ Error: ${error.message}`;
+                errorMessage.style.display = 'block';
+            } finally {
+                // Re-enable submit button
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Review Reconciliation Report';
+                submitBtn.onclick = reviewReconciliation;
+            }
+        }
+
+        // Initialize with one expense row
+        document.addEventListener('DOMContentLoaded', function() {
+            addExpenseRow();
+        });
+    </script>
+</body>
+</html>
