@@ -213,7 +213,7 @@
 
         .modal-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
         }
@@ -276,6 +276,16 @@
             color: #666;
             font-style: italic;
         }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -283,6 +293,10 @@
         <h1>📊 Petty Cash Submissions - Admin Dashboard</h1>
         <p class="subtitle">View and manage all petty cash reconciliation reports</p>
         
+        <div id="errorMessage" class="error-message">
+            ❌ Error loading submissions. Please try again.
+        </div>
+
         <div class="stats-grid">
             <div class="stat-card total">
                 <div class="stat-label">Total Submissions</div>
@@ -345,7 +359,7 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:5000';
+        const API_BASE = 'https://accountability-backend-wqms.onrender.com';
 
         // Load submissions when page loads
         document.addEventListener('DOMContentLoaded', function() {
@@ -360,10 +374,17 @@
         // Load all submissions from the backend
         async function loadSubmissions() {
             const container = document.getElementById('submissionsContainer');
+            const errorMessage = document.getElementById('errorMessage');
             container.innerHTML = '<div class="loading">Loading submissions...</div>';
+            errorMessage.style.display = 'none';
 
             try {
                 const response = await fetch(`${API_BASE}/expenses/submitted`);
+                
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                }
+                
                 const submissions = await response.json();
 
                 // Update statistics
@@ -375,7 +396,10 @@
                 // Display submissions
                 displaySubmissions(filteredSubmissions);
             } catch (error) {
-                container.innerHTML = '<div class="error-message">Error loading submissions: ' + error.message + '</div>';
+                console.error('Error loading submissions:', error);
+                errorMessage.textContent = `❌ Error loading submissions: ${error.message}. The server might be starting up. Please wait a moment and try again.`;
+                errorMessage.style.display = 'block';
+                container.innerHTML = '<div class="no-data">Unable to load submissions</div>';
             }
         }
 
